@@ -2,122 +2,146 @@ import RPi.GPIO as GPIO
 import pygame
 import time
 import sys
+import traceback
 from ultrasonicsensor import UltrasonicSensor
 from target import Target
 from display import draw
 
 # Configuración
-SERVO_PIN = 12       # Pin físico para el servo
-TRIG_PIN = 16        # Pin físico para TRIG
-ECHO_PIN = 18        # Pin físico para ECHO
-MAX_DISTANCE = 60    # cm (rango máximo de detección)
-SWEEP_STEP = 2       # Paso de barrido en grados
-SWEEP_DELAY = 0.02   # Tiempo entre pasos (ajustable)
+SERVO_PIN = 12       # Pin físico para el servo (GPIO18)
+TRIG_PIN = 16        # Pin físico para TRIG (GPIO23)
+ECHO_PIN = 18        # Pin físico para ECHO (GPIO24)
+MAX_DISTANCE = 60    # cm
+SWEEP_STEP = 2       # Paso de barrido
+SWEEP_DELAY = 0.03   # Tiempo entre pasos
 
-def setup():
-    """Configura hardware y pygame"""
+def setup_gpio():
+    """Configuración segura de GPIO"""
     try:
-        # Inicializar GPIO (modo BOARD para consistencia)
         GPIO.setmode(GPIO.BOARD)
         GPIO.setwarnings(False)
         
         # Configurar servo
         GPIO.setup(SERVO_PIN, GPIO.OUT)
-        servo = GPIO.PWM(SERVO_PIN, 50)  # Frecuencia 50Hz
-        servo.start(7.5)  # Posición inicial (90°)
-        time.sleep(0.5)   # Tiempo para estabilizar
+        servo = GPIO.PWM(SERVO_PIN, 50)  # 50Hz
+        servo.start(0)
+        time.sleep(0.5)
         
-        # Inicializar pygame
+        return servo
+    except Exception as e:
+        print(f"Error configurando GPIO: {str(e)}")
+        raise
+
+def setup_pygame():
+    """Configuración segura de Pygame"""
+    try:
         pygame.init()
         screen = pygame.display.set_mode((1400, 800))
         pygame.display.set_caption(f'Radar Ultrasónico (Rango: {MAX_DISTANCE}cm)')
         font = pygame.font.SysFont('Arial', 20)
-        
-        # Inicializar sensor con modo BOARD
+        return screen, font
+    except Exception as e:
+        print(f"Error configurando Pygame: {str(e)}")
+        raise
+
+def setup():
+    """Configuración completa del sistema"""
+    try:
+        # Inicializar componentes en orden seguro
+        servo = setup_gpio()
+        screen, font = setup_pygame()
         sensor = UltrasonicSensor(TRIG_PIN, ECHO_PIN, GPIO.BOARD)
         
+        print("Todos los componentes inicializados correctamente")
         return servo, screen, font, sensor
         
     except Exception as e:
-        print(f"Error en setup: {str(e)}")
-        GPIO.cleanup()
+        print("\nError durante la inicialización:")
+        traceback.print_exc()
+        cleanup(None, None)
         sys.exit(1)
 
 def main():
-    """Función principal del radar"""
+    """Función principal"""
+    print("Iniciando radar...")
     servo, screen, font, sensor = setup()
-    targets = {}  # Diccionario para almacenar objetivos
+    targets = {}
     clock = pygame.time.Clock()
     
     try:
+        print("Iniciando barrido...")
         while True:
-            # Barrido de ida (0° a 180°)
+            # Barrido de ida
             for angle in range(0, 181, SWEEP_STEP):
                 handle_sweep(angle, servo, sensor, targets, screen, font)
-                
-            # Barrido de vuelta (180° a 0°)
+            
+            # Barrido de vuelta
             for angle in range(180, -1, -SWEEP_STEP):
                 handle_sweep(angle, servo, sensor, targets, screen, font)
                 
     except KeyboardInterrupt:
-        print("\nDeteniendo radar...")
+        print("\nDetención solicitada por usuario")
+    except Exception as e:
+        print("\nError durante la ejecución:")
+        traceback.print_exc()
     finally:
         cleanup(servo, sensor)
 
 def handle_sweep(angle, servo, sensor, targets, screen, font):
-    """Maneja un paso del barrido"""
-    # Control servo (convertir ángulo a ciclo de trabajo)
-    servo_angle = 180 - angle  # Invertir para orientación correcta
-    duty_cycle = (servo_angle / 18.0) + 2.5  # Fórmula ajustada
-    servo.ChangeDutyCycle(duty_cycle)
-    time.sleep(SWEEP_DELAY)
-    
-    # Obtener distancia con filtro de rango
-    distance = sensor.get_distance(max_distance=MAX_DISTANCE)
-    
-    # Actualizar targets si hay detección válida
-    if distance != -1:
-        if angle in targets:
-            targets[angle].update(distance)
-        else:
-            targets[angle] = Target(angle, distance)
-    
-    # Limpieza de targets antiguos
-    current_time = time.time()
-    targets_to_remove = [
-        angle_key for angle_key, target in targets.items()
-        if current_time - target.time > 5.0  # 5 segundos sin actualización
-    ]
-    for angle_key in targets_to_remove:
-        del targets[angle_key]
-    
-    # Renderizar pantalla
-    draw(screen, targets, angle, distance, font)
-    
-    # Manejar eventos pygame
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            raise KeyboardInterrupt
-    
-    # Control de FPS
-    clock.tick(30)
-
-def cleanup(servo, sensor):
-    """Limpia recursos de manera segura"""
+    """Manejo seguro de cada paso del barrido"""
     try:
-        # Regresar servo a posición central
-        servo.ChangeDutyCycle(7.5)
-        time.sleep(0.5)
-        servo.stop()
+        # Control servo
+        duty_cycle = 2.5 + (angle / 18.0)
+        servo.ChangeDutyCycle(duty_cycle)
+        time.sleep(SWEEP_DELAY)
         
-        # Limpiar sensor y GPIO
-        sensor.cleanup()
+        # Lectura del sensor
+        distance = sensor.get_distance(max_distance=MAX_DISTANCE)
         
-        # Cerrar pygame
-        pygame.quit()
+        # Actualización de targets
+        if distance != -1:
+            if angle in targets:
+                targets[angle].update(distance)
+            else:
+                targets[angle] = Target(angle, distance)
+        
+        # Limpieza de targets antiguos
+        current_time = time.time()
+        targets_to_remove = [k for k, t in targets.items() if current_time - t.time > 5.0]
+        for k in targets_to_remove:
+            del targets[k]
+        
+        # Renderizado
+        draw(screen, targets, angle, distance, font)
+        
+        # Manejo de eventos
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                raise KeyboardInterrupt
+                
+        clock.tick(30)
         
     except Exception as e:
-        print(f"Error en cleanup: {str(e)}")
+        print(f"Error en handle_sweep: {str(e)}")
+        raise
+
+def cleanup(servo, sensor):
+    """Limpieza segura de recursos"""
+    print("\nLimpiando recursos...")
+    try:
+        if servo:
+            servo.ChangeDutyCycle(7.5)  # Centrar servo
+            time.sleep(0.3)
+            servo.stop()
+            
+        if sensor:
+            sensor.cleanup()
+            
+        pygame.quit()
+        GPIO.cleanup()
+        print("Recursos liberados correctamente")
+    except Exception as e:
+        print(f"Error durante cleanup: {str(e)}")
     finally:
         sys.exit()
 
