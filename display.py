@@ -2,16 +2,15 @@ import colors
 import pygame
 import math
 import time
-import copy  # Nuevo import para manejar copias seguras
 
-""" This module draws the radar screen """
+""" This module draws the radar screen with points instead of lines """
 
 def draw(radarDisplay, targets, angle, distance, fontRenderer):
     try:
-        # draw initial screen
+        # Dibujar pantalla inicial
         radarDisplay.fill(colors.black)
 
-        # Dibujar círculos de radar
+        # Dibujar círculos concéntricos del radar
         pygame.draw.circle(radarDisplay, colors.green, (700, 800), 650, 1)
         pygame.draw.circle(radarDisplay, colors.green, (700, 800), 550, 1)
         pygame.draw.circle(radarDisplay, colors.green, (700, 800), 450, 1)
@@ -21,13 +20,13 @@ def draw(radarDisplay, targets, angle, distance, fontRenderer):
         # Dibujar área inferior
         radarDisplay.fill(colors.black, [0, 785, 1400, 20])
 
-        # Dibujar líneas guía
-        pygame.draw.line(radarDisplay, colors.green, (30, 780), (1370, 780), 1)  # Horizontal
+        # Dibujar líneas guía (ejes)
+        pygame.draw.line(radarDisplay, colors.green, (30, 780), (1370, 780), 1)  # Horizontal (0°)
         pygame.draw.line(radarDisplay, colors.green, (700, 780), (205, 285), 1)  # 45°
         pygame.draw.line(radarDisplay, colors.green, (700, 780), (700, 80), 1)   # 90°
         pygame.draw.line(radarDisplay, colors.green, (700, 780), (1195, 285), 1) # 135°
 
-        # Panel de estadísticas
+        # Panel de información
         pygame.draw.rect(radarDisplay, colors.blue, [20, 20, 270, 100], 2)
 
         # Marcadores de ángulo
@@ -42,63 +41,65 @@ def draw(radarDisplay, targets, angle, distance, fontRenderer):
             rendered_text = fontRenderer.render(text, 1, colors.green)
             radarDisplay.blit(rendered_text, pos)
 
-        # Línea de barrido
+        # Línea de barrido actual
         a = math.sin(math.radians(angle)) * 700.0
         b = math.cos(math.radians(angle)) * 700.0
         pygame.draw.line(radarDisplay, colors.green, (700, 780), (700 - int(b), 780 - int(a)), 3)
 
-        # Mostrar ángulo actual
+        # Mostrar información de ángulo y distancia
         angle_text = fontRenderer.render(f"Angle: {angle}°", 1, colors.white)
         radarDisplay.blit(angle_text, (40, 40))
 
-        # Mostrar distancia
         dist_text = fontRenderer.render(
             "Distance: Out Of Range" if distance == -1 else f"Distance: {distance} cm", 
             1, colors.white
         )
         radarDisplay.blit(dist_text, (40, 80))
 
-        # Dibujar objetivos - USAMOS UNA COPIA PARA EVITAR MODIFICACIONES DURANTE ITERACIÓN
-        for angle_key in list(targets.keys()):  # Convertimos a lista para iteración segura
+        # Dibujar objetivos como puntos en lugar de líneas
+        for angle_key in list(targets.keys()):  # Iteración segura
             target = targets.get(angle_key)
-            if not target:  # Verificación de existencia
+            if not target:
                 continue
 
             try:
-                # Cálculo de coordenadas
-                c = math.sin(math.radians(target.angle)) * 800.0
-                d = math.cos(math.radians(target.angle)) * 800.0
-                e = math.sin(math.radians(target.angle)) * (700 / 60) * target.distance  # Cambiado a 60
-                f = math.cos(math.radians(target.angle)) * (700 / 60) * target.distance  # Cambiado a 60
+                # Calcular posición del punto (coordenadas polares a cartesianas)
+                radius = (700 / 60) * target.distance  # Escala para 60cm máximo
+                x = 700 - radius * math.cos(math.radians(target.angle))
+                y = 780 - radius * math.sin(math.radians(target.angle))
 
-                # Dibujar línea del objetivo
-                pygame.draw.line(
-                    radarDisplay, 
-                    target.color, 
-                    (700 - int(f), 780 - int(e)), 
-                    (700 - int(d), 780 - int(c)), 
-                    3
-                )
-
-                # Efecto de desvanecimiento
+                # Dibujar punto (círculo relleno) con efecto de desvanecimiento
+                point_size = 6  # Tamaño base del punto
+                
+                # Determinar color basado en el tiempo transcurrido
                 diff_time = time.time() - target.time
                 
                 if diff_time <= 0.5:
-                    target.color = colors.red1L
+                    color = colors.red1L
+                    point_size = 8  # Más grande cuando es reciente
                 elif 0.5 < diff_time <= 1.0:
-                    target.color = colors.red2L
+                    color = colors.red2L
+                    point_size = 7
                 elif 1.0 < diff_time <= 1.5:
-                    target.color = colors.red3L
+                    color = colors.red3L
+                    point_size = 6
                 elif 1.5 < diff_time <= 2.0:
-                    target.color = colors.red4L
+                    color = colors.red4L
+                    point_size = 5
                 elif 2.0 < diff_time <= 2.5:
-                    target.color = colors.red5L
+                    color = colors.red5L
+                    point_size = 4
                 elif 2.5 < diff_time <= 3.0:
-                    target.color = colors.red6L
+                    color = colors.red6L
+                    point_size = 3
                 elif diff_time > 3.0:
-                    del targets[angle_key]  # Eliminación segura
+                    del targets[angle_key]  # Eliminar objetivo después de 3 segundos
+                    continue
+                
+                # Dibujar el punto (círculo relleno)
+                pygame.draw.circle(radarDisplay, color, (int(x), int(y)), point_size)
 
-            except (AttributeError, KeyError) as e:
+            except Exception as e:
                 print(f"Error dibujando objetivo: {e}")
                 continue
 
@@ -106,4 +107,4 @@ def draw(radarDisplay, targets, angle, distance, fontRenderer):
 
     except Exception as e:
         print(f"Error crítico en renderizado: {e}")
-        raise  # Relanzamos la excepción para manejo externo
+        raise
