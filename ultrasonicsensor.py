@@ -2,52 +2,50 @@ import time
 import RPi.GPIO as GPIO
 
 def ultrasonicRead(GPIO, TRIG, ECHO):
-    """Versión mejorada con protección contra falsas detecciones"""
+    """Versión balanceada con mejor sensibilidad"""
     
-    # 1. Estabilización más robusta del sensor
+    # 1. Estabilización del sensor
     GPIO.output(TRIG, False)
-    time.sleep(0.05)  # Tiempo aumentado para mayor estabilidad
+    time.sleep(0.02)  # Tiempo equilibrado
     
-    # 2. Pulso más preciso
+    # 2. Pulso ultrasónico
     GPIO.output(TRIG, True)
-    time.sleep(0.00001)  # 10μs exactos (reducido de 100μs)
+    time.sleep(0.00001)  # 10μs (óptimo para HC-SR04)
     GPIO.output(TRIG, False)
     
-    timeout = time.time() + 0.1  # Timeout de 100ms (para ~1.7m máximo)
+    timeout = time.time() + 0.04  # Timeout para ~60cm (40ms)
     
-    # 3. Medición con protección mejorada
+    # 3. Detección de eco mejorada
     try:
-        # Espera por el inicio del eco (mejorado)
-        pulse_start = None
+        # Espera inicio del eco
+        start_time = None
         while GPIO.input(ECHO) == 0:
-            pulse_start = time.time()
+            start_time = time.time()
             if time.time() > timeout:
                 return -1
         
-        # Espera por el fin del eco (mejorado)
-        pulse_end = None
+        # Espera fin del eco
+        end_time = None
         while GPIO.input(ECHO) == 1:
-            pulse_end = time.time()
+            end_time = time.time()
             if time.time() > timeout:
                 return -1
         
-        # 4. Validación básica de tiempos
-        if pulse_start is None or pulse_end is None:
+        # 4. Validación básica
+        if start_time is None or end_time is None:
             return -1
             
-        # 5. Cálculo de distancia con filtros
-        duration = pulse_end - pulse_start
+        # 5. Cálculo y filtrado inteligente
+        duration = end_time - start_time
         distance = round((duration * 34300) / 2, 2)
         
-        # Filtros combinados:
-        # - Ignorar distancias menores a 5cm (ruido típico)
-        # - Ignorar el rango problemático de 2-4cm
-        # - Mantener el rango máximo de 50cm
-        if (distance >= 5 and distance <= 50 and 
-            not (2 <= distance <= 4)):  # Bloqueo específico para falsos 3cm
+        # Filtros mejorados:
+        if distance <= 2:  # Ignorar ruido muy cercano
+            return -1
+        elif 2 < distance <= 60:  # Rango útil aumentado
             return distance
+        else:  # Fuera de rango
+            return -1
             
-        return -1
-        
     except Exception:
-        return -1  # En caso de cualquier error
+        return -1
