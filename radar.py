@@ -8,12 +8,7 @@ from target import *
 from display import draw
 from ultrasonicsensor import ultrasonicRead
 
-# The range is set to 50 cm, to change it 
-# change the range condition in the ultrasonicsensor module
-# change the range condition in this module
-# change scale in e and f in draw function in display module
-
-print 'Radar Start'
+print ('Radar Start')
 
 # initialize the program
 x = pygame.init()
@@ -45,18 +40,14 @@ GPIO.setup(ECHO, GPIO.IN)
 # targets list
 targets = {}
 
-
-
 try:
     while True:
-
         # rotate from 0 to 180
         for angle in range(0, 180):
-            
             distance = ultrasonicRead(GPIO, TRIG, ECHO)
             
-            # change the condition if the range is changed
-            if distance != -1 and distance <= 50:
+            # Changed from 50 to 60 cm
+            if distance != -1 and distance <= 60:
                 targets[angle] = Target(angle, distance)
                 
             draw(radarDisplay, targets, angle, distance, fontRenderer)
@@ -67,14 +58,12 @@ try:
 
             time.sleep(0.001)
             
-
         # rotate from 180 to 0
         for angle in range(180, 0, -1):
-            
             distance = ultrasonicRead(GPIO, TRIG, ECHO)
             
-            # change the condition if the range is changed
-            if distance != -1 and distance <= 50:
+            # Changed from 50 to 60 cm
+            if distance != -1 and distance <= 60:
                 targets[angle] = Target(angle, distance)
             
             draw(radarDisplay, targets, angle, distance, fontRenderer)
@@ -91,16 +80,15 @@ try:
                 raise KeyboardInterrupt
             
 except KeyboardInterrupt:
-    print 'Radar Exit'
+    print ('Radar Exit')
     servo.stop()
     GPIO.cleanup()
     
 except Exception as e:
-    print e
-    print 'Radar Exit'
+    print (e)
+    print ('Radar Exit')
     servo.stop()
     GPIO.cleanup()
-    
     
 pygame.quit()
 sys.exit()

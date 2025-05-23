@@ -1,6 +1,6 @@
 import time
 
-""" This module detects objects using the ultrasonic and sends feedback to the main(radar) module"""
+""" This module detects objects using the ultrasonic and sends feedback to the main(radar) module """
 
 def ultrasonicRead(GPIO, TRIG, ECHO):
     
@@ -31,8 +31,8 @@ def ultrasonicRead(GPIO, TRIG, ECHO):
     total_time = end_time - start_time
     distance = (34300 * total_time) / 2
     distance = round(distance, 2)
-    # change the condition if the range is changed
-    if distance <= 50:
+    # Changed from 50 to 60 cm
+    if distance <= 60:
         return distance
     else:
         return -1
