@@ -1,51 +1,85 @@
 import time
 import RPi.GPIO as GPIO
 
-def ultrasonicRead(GPIO, TRIG, ECHO):
-    """Versión balanceada con mejor sensibilidad"""
-    
-    # 1. Estabilización del sensor
-    GPIO.output(TRIG, False)
-    time.sleep(0.02)  # Tiempo equilibrado
-    
-    # 2. Pulso ultrasónico
-    GPIO.output(TRIG, True)
-    time.sleep(0.00001)  # 10μs (óptimo para HC-SR04)
-    GPIO.output(TRIG, False)
-    
-    timeout = time.time() + 0.04  # Timeout para ~60cm (40ms)
-    
-    # 3. Detección de eco mejorada
+class UltrasonicSensor:
+    def __init__(self, trig_pin, echo_pin):
+        """Inicializa el sensor ultrasónico"""
+        self.TRIG = trig_pin
+        self.ECHO = echo_pin
+        
+        # Configuración de GPIO
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self.TRIG, GPIO.OUT)
+        GPIO.setup(self.ECHO, GPIO.IN)
+        
+        # Estabilizar el sensor
+        GPIO.output(self.TRIG, False)
+        time.sleep(0.5)
+        print("Sensor ultrasónico inicializado")
+
+    def get_distance(self):
+        """Obtiene la distancia en cm"""
+        try:
+            # Enviar pulso de trigger
+            GPIO.output(self.TRIG, True)
+            time.sleep(0.00001)  # 10 microsegundos
+            GPIO.output(self.TRIG, False)
+            
+            # Esperar el eco (pulso HIGH)
+            timeout = time.time() + 0.1  # Timeout de 100ms
+            
+            # Esperar inicio del pulso
+            while GPIO.input(self.ECHO) == 0 and time.time() < timeout:
+                pulse_start = time.time()
+            
+            if time.time() >= timeout:
+                print("Timeout esperando inicio de pulso")
+                return -1
+            
+            # Esperar fin del pulso
+            while GPIO.input(self.ECHO) == 1 and time.time() < timeout:
+                pulse_end = time.time()
+            
+            if time.time() >= timeout:
+                print("Timeout esperando fin de pulso")
+                return -1
+            
+            # Calcular distancia
+            pulse_duration = pulse_end - pulse_start
+            distance = round((pulse_duration * 34300) / 2, 2)  # Velocidad del sonido: 34300 cm/s
+            
+            # Validar rango razonable (2cm a 400cm)
+            if 2 <= distance <= 50:
+                return distance
+            else:
+                print(f"Distancia fuera de rango: {distance}cm")
+                return -1
+                
+        except Exception as e:
+            print(f"Error al leer sensor: {str(e)}")
+            return -1
+
+    def cleanup(self):
+        """Limpia los recursos GPIO"""
+        GPIO.cleanup()
+        print("GPIO limpiado")
+
+# Ejemplo de uso
+if __name__ == "__main__":
     try:
-        # Espera inicio del eco
-        start_time = None
-        while GPIO.input(ECHO) == 0:
-            start_time = time.time()
-            if time.time() > timeout:
-                return -1
+        # Configura tus pines aquí (BCM numbering)
+        sensor = UltrasonicSensor(trig_pin=23, echo_pin=24)
         
-        # Espera fin del eco
-        end_time = None
-        while GPIO.input(ECHO) == 1:
-            end_time = time.time()
-            if time.time() > timeout:
-                return -1
-        
-        # 4. Validación básica
-        if start_time is None or end_time is None:
-            return -1
+        while True:
+            distance = sensor.get_distance()
+            if distance != -1:
+                print(f"Distancia: {distance} cm")
+            else:
+                print("Objeto no detectado o fuera de rango")
             
-        # 5. Cálculo y filtrado inteligente
-        duration = end_time - start_time
-        distance = round((duration * 34300) / 2, 2)
-        
-        # Filtros mejorados:
-        if distance <= 2:  # Ignorar ruido muy cercano
-            return -1
-        elif 2 < distance <= 60:  # Rango útil aumentado
-            return distance
-        else:  # Fuera de rango
-            return -1
+            time.sleep(1)  # Espera 1 segundo entre lecturas
             
-    except Exception:
-        return -1
+    except KeyboardInterrupt:
+        print("\nDeteniendo el programa...")
+    finally:
+        sensor.cleanup()
