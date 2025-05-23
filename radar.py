@@ -1,11 +1,10 @@
 import RPi.GPIO as GPIO
 import pygame
-import math
 import time
 import sys
+from ultrasonicsensor import UltrasonicSensor
 from target import Target
 from display import draw
-from ultrasonicsensor import UltrasonicSensor
 
 # Configuración
 SERVO_PIN = 12
@@ -32,7 +31,10 @@ def setup():
         pygame.display.set_caption(f'Radar Ultrasónico (Rango: {MAX_DISTANCE}cm)')
         font = pygame.font.SysFont('Arial', 20)
         
-        return servo, screen, font
+        # Inicializar sensor
+        sensor = UltrasonicSensor(TRIG_PIN, ECHO_PIN)
+        
+        return servo, screen, font, sensor
         
     except Exception as e:
         print(f"Error inicializando: {str(e)}")
@@ -40,9 +42,9 @@ def setup():
         sys.exit(1)
 
 def main():
-    servo, screen, font = setup()
-    sensor = UltrasonicSensor(TRIG_PIN, ECHO_PIN)
+    servo, screen, font, sensor = setup()
     targets = {}
+    clock = pygame.time.Clock()
     
     try:
         while True:
@@ -65,11 +67,16 @@ def handle_sweep(angle, servo, sensor, targets, screen, font):
     servo_angle = 180 - angle
     duty_cycle = (servo_angle / 18.0) + 2
     servo.ChangeDutyCycle(duty_cycle)
+    time.sleep(0.01)  # Pequeña pausa para el servo
     
-    # Obtener distancia
-    distance = sensor.get_distance(MAX_DISTANCE, samples=5)
+    # Obtener distancia con filtros estrictos
+    distance = sensor.get_distance(
+        max_distance=MAX_DISTANCE,
+        samples=7,
+        required_valid=5
+    )
     
-    # Actualizar targets
+    # Actualizar targets solo si es una detección válida
     if distance != -1:
         if angle in targets:
             targets[angle].update(distance)
@@ -77,13 +84,13 @@ def handle_sweep(angle, servo, sensor, targets, screen, font):
             targets[angle] = Target(angle, distance)
     
     # Eliminar targets antiguos
+    current_time = time.time()
     for angle_key in list(targets.keys()):
-        if targets[angle_key].should_remove():
+        if current_time - targets[angle_key].time > 5.0:  # 5 segundos sin actualización
             del targets[angle_key]
     
     # Renderizar
     draw(screen, targets, angle, distance, font)
-    time.sleep(0.01)
     
     # Manejar eventos
     for event in pygame.event.get():
