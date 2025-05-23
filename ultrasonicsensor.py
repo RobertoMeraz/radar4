@@ -1,38 +1,55 @@
 import time
+import statistics
 
-""" This module detects objects using the ultrasonic and sends feedback to the main(radar) module """
-
-def ultrasonicRead(GPIO, TRIG, ECHO):
+def ultrasonicRead(GPIO, TRIG, ECHO, samples=3, max_distance=60):
+    """
+    Versión mejorada con:
+    - Múltiples muestras para reducir ruido
+    - Filtro de mediana
+    - Timeout dinámico
+    - Validación de rangos
+    """
+    measurements = []
     
-    # settling the sensor
-    GPIO.output(TRIG, False)
-    # time.sleep(0.01)
-
-    # send a signal
-    GPIO.output(TRIG, True)
-    time.sleep(0.0001)
-    GPIO.output(TRIG, False)
-
-    # catch a signal
-    error = 0
-    while GPIO.input(ECHO) == 0:
-        start_time = time.time()
-        error += 1
-        if error > 1000:
-            break
-    if error > 1000:
-        return -1
-
-    end_time = time.time()
-    while GPIO.input(ECHO) == 1:
-        end_time = time.time()
-
-    # calculate the distance 
-    total_time = end_time - start_time
-    distance = (34300 * total_time) / 2
-    distance = round(distance, 2)
-    # Changed from 50 to 60 cm
-    if distance <= 60:
-        return distance
-    else:
-        return -1
+    for _ in range(samples):
+        try:
+            # Estabilización del sensor
+            GPIO.output(TRIG, False)
+            time.sleep(0.01)
+            
+            # Envío del pulso
+            GPIO.output(TRIG, True)
+            time.sleep(0.0001)
+            GPIO.output(TRIG, False)
+            
+            # Timeout basado en la distancia máxima (4ms por cm * 60cm = 240ms)
+            timeout = time.time() + 0.24
+            
+            # Espera por el eco
+            while GPIO.input(ECHO) == 0:
+                if time.time() > timeout:
+                    raise TimeoutError("Timeout en espera de eco")
+                pulse_start = time.time()
+            
+            while GPIO.input(ECHO) == 1:
+                if time.time() > timeout:
+                    raise TimeoutError("Timeout en recepción de eco")
+                pulse_end = time.time()
+            
+            pulse_duration = pulse_end - pulse_start
+            distance = (pulse_duration * 34300) / 2  # Velocidad del sonido (343 m/s)
+            
+            # Filtro de datos inválidos
+            if 2 <= distance <= max_distance:  # Ignorar medidas <2cm (ruido típico)
+                measurements.append(round(distance, 2))
+                
+            time.sleep(0.02)  # Intervalo entre muestras
+            
+        except Exception as e:
+            print(f"Error en medición: {str(e)}")
+            continue
+    
+    # Retorna la mediana de las mediciones válidas
+    if measurements:
+        return statistics.median(measurements)
+    return -1
