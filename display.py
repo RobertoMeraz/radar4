@@ -3,108 +3,103 @@ import pygame
 import math
 import time
 
-""" This module draws the radar screen with points instead of lines """
+""" This module draws the radar screen """
 
 def draw(radarDisplay, targets, angle, distance, fontRenderer):
     try:
-        # Dibujar pantalla inicial
+        # draw initial screen
         radarDisplay.fill(colors.black)
 
-        # Dibujar círculos concéntricos del radar
-        pygame.draw.circle(radarDisplay, colors.green, (700, 800), 650, 1)
-        pygame.draw.circle(radarDisplay, colors.green, (700, 800), 550, 1)
-        pygame.draw.circle(radarDisplay, colors.green, (700, 800), 450, 1)
-        pygame.draw.circle(radarDisplay, colors.green, (700, 800), 300, 1)
-        pygame.draw.circle(radarDisplay, colors.green, (700, 800), 150, 1)
+        # draw radar circles
+        pygame.draw.circle(radarDisplay, colors.green, (700,800), 650, 1)
+        pygame.draw.circle(radarDisplay, colors.green, (700,800), 550, 1)
+        pygame.draw.circle(radarDisplay, colors.green, (700,800), 450, 1)
+        pygame.draw.circle(radarDisplay, colors.green, (700,800), 300, 1)
+        pygame.draw.circle(radarDisplay, colors.green, (700,800), 150, 1)
 
-        # Dibujar área inferior
+        # draw bottom area
         radarDisplay.fill(colors.black, [0, 785, 1400, 20])
 
-        # Dibujar líneas guía (ejes)
-        pygame.draw.line(radarDisplay, colors.green, (30, 780), (1370, 780), 1)  # Horizontal (0°)
-        pygame.draw.line(radarDisplay, colors.green, (700, 780), (205, 285), 1)  # 45°
-        pygame.draw.line(radarDisplay, colors.green, (700, 780), (700, 80), 1)   # 90°
-        pygame.draw.line(radarDisplay, colors.green, (700, 780), (1195, 285), 1) # 135°
+        # draw guide lines
+        pygame.draw.line(radarDisplay, colors.green, (30, 780), (1370, 780), 1)  # 0°
+        pygame.draw.line(radarDisplay, colors.green, (700, 780), (205, 285), 1)   # 45°
+        pygame.draw.line(radarDisplay, colors.green, (700, 780), (700, 80), 1)    # 90°
+        pygame.draw.line(radarDisplay, colors.green, (700, 780), (1195, 285), 1)  # 135°
 
-        # Panel de información
+        # draw stats board
         pygame.draw.rect(radarDisplay, colors.blue, [20, 20, 270, 100], 2)
 
-        # Marcadores de ángulo
-        angles = [
-            ("0", (10, 780)),
-            ("45", (180, 260)),
-            ("90", (690, 55)),
-            ("135", (1205, 270)),
-            ("180", (1365, 780))
+        # draw angle markers
+        angle_markers = [
+            ("0", (10,780)), ("45", (180,260)), ("90", (690,55)),
+            ("135", (1205,270)), ("180", (1365,780))
         ]
-        for text, pos in angles:
+        for text, pos in angle_markers:
             rendered_text = fontRenderer.render(text, 1, colors.green)
             radarDisplay.blit(rendered_text, pos)
 
-        # Línea de barrido actual
+        # draw sweep line
         a = math.sin(math.radians(angle)) * 700.0
         b = math.cos(math.radians(angle)) * 700.0
         pygame.draw.line(radarDisplay, colors.green, (700, 780), (700 - int(b), 780 - int(a)), 3)
 
-        # Mostrar información de ángulo y distancia
-        angle_text = fontRenderer.render(f"Angle: {angle}°", 1, colors.white)
-        radarDisplay.blit(angle_text, (40, 40))
+        # draw angle info
+        angle_text = fontRenderer.render("Angle : " + str(angle), 1, colors.white)
+        radarDisplay.blit(angle_text, (40,40))
 
+        # draw distance info
         dist_text = fontRenderer.render(
-            "Distance: Out Of Range" if distance == -1 else f"Distance: {distance} cm", 
+            "Distance : Out Of Range" if distance == -1 else f"Distance : {distance} cm",
             1, colors.white
         )
-        radarDisplay.blit(dist_text, (40, 80))
+        radarDisplay.blit(dist_text, (40,80))
 
-        # Dibujar objetivos como puntos en lugar de líneas
-        for angle_key in list(targets.keys()):  # Iteración segura
+        # draw targets - using safe iteration
+        for angle_key in list(targets.keys()):  # Create a copy of keys for safe iteration
             target = targets.get(angle_key)
-            if not target:
+            if not target:  # Skip if target was removed
                 continue
 
             try:
-                # Calcular posición del punto (coordenadas polares a cartesianas)
-                radius = (700 / 60) * target.distance  # Escala para 60cm máximo
-                x = 700 - radius * math.cos(math.radians(target.angle))
-                y = 780 - radius * math.sin(math.radians(target.angle))
+                # calculate target position (updated for 60cm range)
+                c = math.sin(math.radians(target.angle)) * 800.0
+                d = math.cos(math.radians(target.angle)) * 800.0
+                e = math.sin(math.radians(target.angle)) * (700 / 60) * target.distance
+                f = math.cos(math.radians(target.angle)) * (700 / 60) * target.distance
 
-                # Dibujar punto (círculo relleno) con efecto de desvanecimiento
-                point_size = 6  # Tamaño base del punto
-                
-                # Determinar color basado en el tiempo transcurrido
-                diff_time = time.time() - target.time
-                
-                if diff_time <= 0.5:
-                    color = colors.red1L
-                    point_size = 8  # Más grande cuando es reciente
-                elif 0.5 < diff_time <= 1.0:
-                    color = colors.red2L
-                    point_size = 7
-                elif 1.0 < diff_time <= 1.5:
-                    color = colors.red3L
-                    point_size = 6
-                elif 1.5 < diff_time <= 2.0:
-                    color = colors.red4L
-                    point_size = 5
-                elif 2.0 < diff_time <= 2.5:
-                    color = colors.red5L
-                    point_size = 4
-                elif 2.5 < diff_time <= 3.0:
-                    color = colors.red6L
-                    point_size = 3
-                elif diff_time > 3.0:
-                    del targets[angle_key]  # Eliminar objetivo después de 3 segundos
-                    continue
-                
-                # Dibujar el punto (círculo relleno)
-                pygame.draw.circle(radarDisplay, color, (int(x), int(y)), point_size)
+                # draw target line
+                pygame.draw.line(
+                    radarDisplay, 
+                    target.color, 
+                    (700 - int(f), 780 - int(e)), 
+                    (700 - int(d), 780 - int(c)), 
+                    3
+                )
 
-            except Exception as e:
-                print(f"Error dibujando objetivo: {e}")
+                # fading effect
+                diffTime = time.time() - target.time
+                
+                if diffTime <= 0.5:
+                    target.color = colors.red1L
+                elif 0.5 < diffTime <= 1.0:
+                    target.color = colors.red2L
+                elif 1.0 < diffTime <= 1.5:
+                    target.color = colors.red3L
+                elif 1.5 < diffTime <= 2.0:
+                    target.color = colors.red4L
+                elif 2.0 < diffTime <= 2.5:
+                    target.color = colors.red5L
+                elif 2.5 < diffTime <= 3.0:
+                    target.color = colors.red6L
+                elif diffTime > 3.0:
+                    del targets[angle_key]  # Remove old targets
+
+            except (AttributeError, KeyError) as e:
+                print(f"Error drawing target: {e}")
                 continue
 
         pygame.display.update()
 
     except Exception as e:
-        print(f"Error crítico en renderizado: {e}")
+        print(f"Display error: {e}")
         raise
