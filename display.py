@@ -2,90 +2,108 @@ import colors
 import pygame
 import math
 import time
+import copy  # Nuevo import para manejar copias seguras
 
 """ This module draws the radar screen """
 
 def draw(radarDisplay, targets, angle, distance, fontRenderer):
-    # draw initial screen
-    radarDisplay.fill(colors.black)
+    try:
+        # draw initial screen
+        radarDisplay.fill(colors.black)
 
-    pygame.draw.circle(radarDisplay, colors.green, (700,800), 650, 1)
-    pygame.draw.circle(radarDisplay, colors.green, (700,800), 550, 1)
-    pygame.draw.circle(radarDisplay, colors.green, (700,800), 450, 1)
-    pygame.draw.circle(radarDisplay, colors.green, (700,800), 300, 1)
-    pygame.draw.circle(radarDisplay, colors.green, (700,800), 150, 1)
+        # Dibujar círculos de radar
+        pygame.draw.circle(radarDisplay, colors.green, (700, 800), 650, 1)
+        pygame.draw.circle(radarDisplay, colors.green, (700, 800), 550, 1)
+        pygame.draw.circle(radarDisplay, colors.green, (700, 800), 450, 1)
+        pygame.draw.circle(radarDisplay, colors.green, (700, 800), 300, 1)
+        pygame.draw.circle(radarDisplay, colors.green, (700, 800), 150, 1)
 
-    radarDisplay.fill(colors.black, [0, 785, 1400, 20])
+        # Dibujar área inferior
+        radarDisplay.fill(colors.black, [0, 785, 1400, 20])
 
-    # horizontal line
-    pygame.draw.line(radarDisplay, colors.green, (30, 780), (1370, 780), 1)
+        # Dibujar líneas guía
+        pygame.draw.line(radarDisplay, colors.green, (30, 780), (1370, 780), 1)  # Horizontal
+        pygame.draw.line(radarDisplay, colors.green, (700, 780), (205, 285), 1)  # 45°
+        pygame.draw.line(radarDisplay, colors.green, (700, 780), (700, 80), 1)   # 90°
+        pygame.draw.line(radarDisplay, colors.green, (700, 780), (1195, 285), 1) # 135°
 
-    # 45 degree line
-    pygame.draw.line(radarDisplay, colors.green, (700, 780),(205, 285), 1)
+        # Panel de estadísticas
+        pygame.draw.rect(radarDisplay, colors.blue, [20, 20, 270, 100], 2)
 
-    # 90 degree line
-    pygame.draw.line(radarDisplay, colors.green, (700, 780), (700, 80), 1)
+        # Marcadores de ángulo
+        angles = [
+            ("0", (10, 780)),
+            ("45", (180, 260)),
+            ("90", (690, 55)),
+            ("135", (1205, 270)),
+            ("180", (1365, 780))
+        ]
+        for text, pos in angles:
+            rendered_text = fontRenderer.render(text, 1, colors.green)
+            radarDisplay.blit(rendered_text, pos)
 
-    # 135 degree line
-    pygame.draw.line(radarDisplay, colors.green, (700, 780), (1195, 285), 1)
+        # Línea de barrido
+        a = math.sin(math.radians(angle)) * 700.0
+        b = math.cos(math.radians(angle)) * 700.0
+        pygame.draw.line(radarDisplay, colors.green, (700, 780), (700 - int(b), 780 - int(a)), 3)
 
-    # draw statistics board
-    pygame.draw.rect(radarDisplay, colors.blue, [20, 20, 270, 100], 2)
+        # Mostrar ángulo actual
+        angle_text = fontRenderer.render(f"Angle: {angle}°", 1, colors.white)
+        radarDisplay.blit(angle_text, (40, 40))
 
-    # write the degrees
-    text = fontRenderer.render("0", 1, colors.green)
-    radarDisplay.blit(text,(10,780))
-    text = fontRenderer.render("45", 1, colors.green)
-    radarDisplay.blit(text,(180,260))
-    text = fontRenderer.render("90", 1, colors.green)
-    radarDisplay.blit(text,(690,55))
-    text = fontRenderer.render("135", 1, colors.green)
-    radarDisplay.blit(text,(1205,270))
-    text = fontRenderer.render("180", 1, colors.green)
-    radarDisplay.blit(text,(1365,780))
+        # Mostrar distancia
+        dist_text = fontRenderer.render(
+            "Distance: Out Of Range" if distance == -1 else f"Distance: {distance} cm", 
+            1, colors.white
+        )
+        radarDisplay.blit(dist_text, (40, 80))
 
-    # draw the moving line
-    a = math.sin(math.radians(angle)) * 700.0
-    b = math.cos(math.radians(angle)) * 700.0
-    pygame.draw.line(radarDisplay, colors.green, (700, 780), (700 - int(b), 780 - int(a)), 3)
+        # Dibujar objetivos - USAMOS UNA COPIA PARA EVITAR MODIFICACIONES DURANTE ITERACIÓN
+        for angle_key in list(targets.keys()):  # Convertimos a lista para iteración segura
+            target = targets.get(angle_key)
+            if not target:  # Verificación de existencia
+                continue
 
-    # write the current angle
-    text = fontRenderer.render("Angle : " + str(angle), 1, colors.white)
-    radarDisplay.blit(text,(40,40))
+            try:
+                # Cálculo de coordenadas
+                c = math.sin(math.radians(target.angle)) * 800.0
+                d = math.cos(math.radians(target.angle)) * 800.0
+                e = math.sin(math.radians(target.angle)) * (700 / 60) * target.distance  # Cambiado a 60
+                f = math.cos(math.radians(target.angle)) * (700 / 60) * target.distance  # Cambiado a 60
 
-    # write the distance
-    if distance == -1:
-        text = fontRenderer.render("Distance : Out Of Range" , 1, colors.white)
-    else:
-        text = fontRenderer.render("Distance : " + str(distance) + " cm" , 1, colors.white)
-    radarDisplay.blit(text,(40,80))
+                # Dibujar línea del objetivo
+                pygame.draw.line(
+                    radarDisplay, 
+                    target.color, 
+                    (700 - int(f), 780 - int(e)), 
+                    (700 - int(d), 780 - int(c)), 
+                    3
+                )
 
-    # draw targets
-    for angle in list(targets.keys()):  # Safe iteration with list()
-        # Changed scale from (700/50) to (700/60)
-        e = math.sin(math.radians(targets[angle].angle)) * (700 / 60) * targets[angle].distance
-        f = math.cos(math.radians(targets[angle].angle)) * (700 / 60) * targets[angle].distance
-        c = math.sin(math.radians(targets[angle].angle)) * 800.0
-        d = math.cos(math.radians(targets[angle].angle)) * 800.0
+                # Efecto de desvanecimiento
+                diff_time = time.time() - target.time
+                
+                if diff_time <= 0.5:
+                    target.color = colors.red1L
+                elif 0.5 < diff_time <= 1.0:
+                    target.color = colors.red2L
+                elif 1.0 < diff_time <= 1.5:
+                    target.color = colors.red3L
+                elif 1.5 < diff_time <= 2.0:
+                    target.color = colors.red4L
+                elif 2.0 < diff_time <= 2.5:
+                    target.color = colors.red5L
+                elif 2.5 < diff_time <= 3.0:
+                    target.color = colors.red6L
+                elif diff_time > 3.0:
+                    del targets[angle_key]  # Eliminación segura
 
-        pygame.draw.line(radarDisplay, targets[angle].color, (700 - int(f), 780 - int(e)), (700 - int(d), 780 - int(c)), 3)
-        
-        # fading effect
-        diffTime = time.time() - targets[angle].time
-        
-        if diffTime >= 0.0 and diffTime <= 0.5:
-            targets[angle].color = colors.red1L
-        elif diffTime > 0.5 and diffTime <= 1:
-            targets[angle].color = colors.red2L
-        elif diffTime > 1.0 and diffTime <= 1.5:
-            targets[angle].color = colors.red3L
-        elif diffTime > 1.5 and diffTime <= 2.0:
-            targets[angle].color = colors.red4L
-        elif diffTime > 2.0 and diffTime <= 2.5:
-            targets[angle].color = colors.red5L
-        elif diffTime > 2.5 and diffTime <= 3.0:
-            targets[angle].color = colors.red6L
-        elif diffTime > 3.0:
-            del targets[angle]
+            except (AttributeError, KeyError) as e:
+                print(f"Error dibujando objetivo: {e}")
+                continue
 
-    pygame.display.update()
+        pygame.display.update()
+
+    except Exception as e:
+        print(f"Error crítico en renderizado: {e}")
+        raise  # Relanzamos la excepción para manejo externo
